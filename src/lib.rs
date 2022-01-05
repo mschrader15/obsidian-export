@@ -140,7 +140,7 @@ pub type MarkdownEvents<'a> = Vec<Event<'a>>;
 /// ```
 
 pub type Postprocessor =
-    dyn Fn(&mut Context, &mut MarkdownEvents, &Exporter) -> (PostprocessorResult) + Send + Sync;
+    dyn Fn(&mut Context, &mut MarkdownEvents, &Exporter) -> PostprocessorResult + Send + Sync;
 type Result<T, E = ExportError> = std::result::Result<T, E>;
 
 const PERCENTENCODE_CHARS: &AsciiSet = &CONTROLS.add(b' ').add(b'(').add(b')').add(b'%').add(b'?');

@@ -1,4 +1,4 @@
-use obsidian_export::postprocessors::softbreaks_to_hardbreaks;
+use obsidian_export::postprocessors::{softbreaks_to_hardbreaks, yaml_includer};
 use obsidian_export::{Context, Exporter, MarkdownEvents, PostprocessorResult};
 use pretty_assertions::assert_eq;
 use pulldown_cmark::{CowStr, Event};
@@ -20,15 +20,6 @@ fn foo_to_bar(
         }
     };
     PostprocessorResult::Continue
-    
-    // let events = events
-    //     .into_iter()
-    //     .map(|event| match event {
-    //         Event::Text(text) => Event::Text(CowStr::from(text.replace("foo", "bar"))),
-    //         event => event,
-    //     })
-    //     .collect();
-    // (ctx, events, PostprocessorResult::Continue)
 }
 
 /// This postprocessor appends "bar: baz" to frontmatter.
@@ -72,9 +63,9 @@ fn test_postprocessor_stophere() {
         tmp_dir.path().to_path_buf(),
     );
 
-    exporter.add_postprocessor(&|ctx, mdevents, _none| (PostprocessorResult::StopHere));
+    exporter.add_postprocessor(&|_ctx, _mdevents, _none| (PostprocessorResult::StopHere));
     exporter
-        .add_embed_postprocessor(&|ctx, mdevents, _none| (PostprocessorResult::StopHere));
+        .add_embed_postprocessor(&|_ctx, _mdevents, _none| (PostprocessorResult::StopHere));
     exporter.add_postprocessor(&|_, _, _| panic!("should not be called due to above processor"));
     exporter.add_embed_postprocessor(&|_, _, _| panic!("should not be called due to above processor"));
     exporter.run().unwrap();
@@ -95,7 +86,7 @@ fn test_postprocessor_stop_and_skip() {
     remove_file(&note_path).unwrap();
 
     exporter
-        .add_postprocessor(&|ctx, mdevents, _| (PostprocessorResult::StopAndSkipNote));
+        .add_postprocessor(&|_ctx, _mdevents, _| (PostprocessorResult::StopAndSkipNote));
     exporter.run().unwrap();
 
     assert!(!note_path.exists());
@@ -114,7 +105,7 @@ fn test_postprocessor_change_destination() {
     assert!(original_note_path.exists());
     remove_file(&original_note_path).unwrap();
 
-    exporter.add_postprocessor(&|ctx, mdevents, _| {
+    exporter.add_postprocessor(&|ctx, _mdevents, _| {
         ctx.destination.set_file_name("MovedNote.md");
         PostprocessorResult::Continue
     });
@@ -157,7 +148,7 @@ fn test_embed_postprocessors_stop_and_skip() {
         PathBuf::from("tests/testdata/input/postprocessors"),
         tmp_dir.path().to_path_buf(),
     );
-    exporter.add_embed_postprocessor(&|ctx, mdevents, _| {
+    exporter.add_embed_postprocessor(&|_ctx, _mdevents, _| {
         PostprocessorResult::StopAndSkipNote
     });
 
@@ -181,9 +172,9 @@ fn test_embed_postprocessors_context() {
         tmp_dir.path().to_path_buf(),
     );
 
-    exporter.add_postprocessor(&|ctx, mdevents, _| {
+    exporter.add_postprocessor(&|ctx, _mdevents, _| {
         if ctx.current_file() != &PathBuf::from("Note.md") {
-            return (PostprocessorResult::Continue);
+            return PostprocessorResult::Continue;
         }
         let is_root_note = ctx
             .frontmatter
@@ -198,9 +189,9 @@ fn test_embed_postprocessors_context() {
                 &ctx.current_file().display()
             )
         }
-        (PostprocessorResult::Continue)
+        PostprocessorResult::Continue
     });
-    exporter.add_embed_postprocessor(&|ctx, mdevents, _| {
+    exporter.add_embed_postprocessor(&|ctx, _mdevents, _| {
         let is_root_note = ctx
             .frontmatter
             .get(&Value::String("is_root_note".to_string()))
@@ -214,7 +205,7 @@ fn test_embed_postprocessors_context() {
                 &ctx.current_file().display()
             )
         }
-        (PostprocessorResult::Continue)
+        PostprocessorResult::Continue
     });
 
     exporter.run().unwrap();
@@ -239,5 +230,62 @@ fn test_softbreaks_to_hardbreaks() {
             .join(PathBuf::from("hard_linebreaks.md")),
     )
     .unwrap();
+    assert_eq!(expected, actual);
+}
+
+
+// This test verifies that yaml inclusion works as desired
+// ONLY when a .md file has the specified key set to a YAML true should it work
+#[test]
+fn test_yaml_inclusion() {
+    let tmp_dir = TempDir::new().expect("failed to make tempdir");
+    let files = ["yaml_exclusion.md", "yaml_inclusion.md", "no_yaml.md"];
+    let desired = [false, true, false];
+
+    let mut exporter = Exporter::new(
+        PathBuf::from("tests/testdata/input/postprocessors/yaml_inclusion"),
+        tmp_dir.path().to_path_buf(),
+    );
+
+    exporter.yaml_inclusion_key("export");
+    exporter.add_postprocessor(&yaml_includer);
+
+    // Run the exporter
+    exporter.run().unwrap();
+
+    // Check that each file is included or excluded correctly
+    files.iter().zip(desired.iter()).map(|(f, b)| {
+        let note_path = tmp_dir.path().clone().join(PathBuf::from(f));
+        assert!(note_path.exists() == *b);
+    }).collect()
+
+}
+
+// This test verifies that yaml inclusion works as desired for the embedded post-processor
+// The behavior should be that the file is only embedded *if* it's frontmatter contains export: true
+#[test]
+fn test_yaml_inclusion_embedded() {
+    let tmp_dir = TempDir::new().expect("failed to make tempdir");
+
+    let mut exporter = Exporter::new(
+        PathBuf::from("tests/testdata/input/postprocessors/yaml_inclusion"),
+        tmp_dir.path().to_path_buf(),
+    );
+
+    exporter.yaml_inclusion_key("export");
+    exporter.add_embed_postprocessor(&yaml_includer);
+
+    // Run the exporter
+    exporter.run().unwrap();
+
+    let expected =
+    read_to_string("tests/testdata/expected/postprocessors/yaml_inclusion/yaml_inclusion.md").unwrap();
+    let actual = read_to_string(
+    tmp_dir
+        .path()
+        .clone()
+        .join(PathBuf::from("yaml_inclusion.md")),
+    ).unwrap();
+
     assert_eq!(expected, actual);
 }
