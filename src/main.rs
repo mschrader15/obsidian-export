@@ -117,7 +117,6 @@ fn main() {
         exporter.add_postprocessor(&softbreaks_to_hardbreaks);
     }
 
-
     if let Some(path) = args.start_at {
         exporter.start_at(path);
     }

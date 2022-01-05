@@ -41,7 +41,7 @@ pub struct Context {
     ///     Value::String("bar".to_string()),
     /// );
     /// ```
-    pub frontmatter: Frontmatter, 
+    pub frontmatter: Frontmatter,
 }
 
 impl Context {

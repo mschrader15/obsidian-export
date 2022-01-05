@@ -414,8 +414,6 @@ impl<'a> Exporter<'a> {
         context.frontmatter = frontmatter;
         for func in &self.postprocessors {
             let res = func(&mut context, &mut markdown_events, &self);
-            // context = res.0;
-            // markdown_events = res.1;
             match res{
                 PostprocessorResult::StopHere => break,
                 PostprocessorResult::StopAndSkipNote => return Ok(()),
@@ -622,8 +620,6 @@ impl<'a> Exporter<'a> {
                     // Postprocessors running on embeds shouldn't be able to change frontmatter (or
                     // any other metadata), so we give them a clone of the context.
                     let res = func(&mut child_context, &mut events, &self);
-                    // child_context = res.0;
-                    // events = res.1;
                     match res {
                         PostprocessorResult::StopHere => break,
                         PostprocessorResult::StopAndSkipNote => {
