@@ -86,7 +86,7 @@ pub type MarkdownEvents<'a> = Vec<Event<'a>>;
 /// let mut exporter = Exporter::new(source, destination);
 ///
 /// // add_postprocessor registers a new postprocessor. In this example we use a closure.
-/// exporter.add_postprocessor(&|mut context, events| {
+/// exporter.add_postprocessor(&|context, events, exporter| {
 ///     // This is the key we'll insert into the frontmatter. In this case, the string "foo".
 ///     let key = Value::String("foo".to_string());
 ///     // This is the value we'll insert into the frontmatter. In this case, the string "bar".
@@ -97,7 +97,7 @@ pub type MarkdownEvents<'a> = Vec<Event<'a>>;
 ///
 ///     // Postprocessors must return their (modified) context, the markdown events that make
 ///     // up the note and a next action to take.
-///     (context, events, PostprocessorResult::Continue)
+///     PostprocessorResult::Continue
 /// });
 ///
 /// exporter.run().unwrap();
@@ -118,17 +118,17 @@ pub type MarkdownEvents<'a> = Vec<Event<'a>>;
 /// #
 /// /// This postprocessor replaces any instance of "foo" with "bar" in the note body.
 /// fn foo_to_bar(
-///     context: Context,
-///     events: MarkdownEvents,
-/// ) -> (Context, MarkdownEvents, PostprocessorResult) {
-///     let events = events
-///         .into_iter()
-///         .map(|event| match event {
+///     _context: &mut Context,
+///     events: &mut MarkdownEvents,
+///     _exporter: & Exporter,
+/// ) -> PostprocessorResult {
+///     for event in events.iter_mut() {
+///         *event = match event {
 ///             Event::Text(text) => Event::Text(CowStr::from(text.replace("foo", "bar"))),
-///             event => event,
-///         })
-///         .collect();
-///     (context, events, PostprocessorResult::Continue)
+///             _ => event.clone(),
+///         }
+///     };
+///     PostprocessorResult::Continue
 /// }
 ///
 /// # let tmp_dir = TempDir::new().expect("failed to make tempdir");
