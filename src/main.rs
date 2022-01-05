@@ -1,6 +1,7 @@
 use eyre::{eyre, Result};
 use gumdrop::Options;
-use obsidian_export::postprocessors::softbreaks_to_hardbreaks;
+use lazy_static::__Deref;
+use obsidian_export::postprocessors::{softbreaks_to_hardbreaks, yaml_includer};
 use obsidian_export::{ExportError, Exporter, FrontmatterStrategy, WalkOptions};
 use std::{env, path::PathBuf};
 
@@ -54,6 +55,14 @@ struct Opts {
         default = "false"
     )]
     hard_linebreaks: bool,
+
+    #[options(
+        no_short, 
+        long="front-matter-inclusion-key",
+        help="Only export files with the specified YAML key set to true. --front-matter-inclusion-key=export will only export notes with export: True in the YAML front-matter. All other notes will be ignored.",
+        default="false"
+    )]
+    front_matter_inclusion: bool
 }
 
 fn frontmatter_strategy_from_str(input: &str) -> Result<FrontmatterStrategy> {
@@ -92,6 +101,12 @@ fn main() {
 
     if args.hard_linebreaks {
         exporter.add_postprocessor(&softbreaks_to_hardbreaks);
+    }
+
+    if args.front_matter_inclusion{
+        // let fn_ = ;
+        exporter.yaml_inclusion_key(&"export".to_string());
+        exporter.add_postprocessor(&yaml_includer);
     }
 
     if let Some(path) = args.start_at {

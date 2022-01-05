@@ -140,7 +140,7 @@ pub type MarkdownEvents<'a> = Vec<Event<'a>>;
 /// ```
 
 pub type Postprocessor =
-    dyn Fn(Context, MarkdownEvents) -> (Context, MarkdownEvents, PostprocessorResult) + Send + Sync;
+    dyn Fn(&mut Context, &mut MarkdownEvents, &Exporter) -> (PostprocessorResult) + Send + Sync;
 type Result<T, E = ExportError> = std::result::Result<T, E>;
 
 const PERCENTENCODE_CHARS: &AsciiSet = &CONTROLS.add(b' ').add(b'(').add(b')').add(b'%').add(b'?');
@@ -237,6 +237,7 @@ pub struct Exporter<'a> {
     vault_contents: Option<Vec<PathBuf>>,
     walk_options: WalkOptions<'a>,
     process_embeds_recursively: bool,
+    yaml_inclusion_key: serde_yaml::Value,
     postprocessors: Vec<&'a Postprocessor>,
     embed_postprocessors: Vec<&'a Postprocessor>,
 }
@@ -279,6 +280,7 @@ impl<'a> Exporter<'a> {
             frontmatter_strategy: FrontmatterStrategy::Auto,
             walk_options: WalkOptions::default(),
             process_embeds_recursively: true,
+            yaml_inclusion_key: serde_yaml::Value::String("".to_string()),
             vault_contents: None,
             postprocessors: vec![],
             embed_postprocessors: vec![],
@@ -306,6 +308,10 @@ impl<'a> Exporter<'a> {
         self
     }
 
+    pub fn yaml_inclusion_key(&mut self, key: &str) -> &mut Exporter<'a> {
+        self.yaml_inclusion_key = serde_yaml::Value::String(key.to_string());
+        self
+    }
     /// Set the behavior when recursive embeds are encountered.
     ///
     /// When `recursive` is true (the default), emdeds are always processed recursively. This may
@@ -407,10 +413,10 @@ impl<'a> Exporter<'a> {
         let (frontmatter, mut markdown_events) = self.parse_obsidian_note(src, &context)?;
         context.frontmatter = frontmatter;
         for func in &self.postprocessors {
-            let res = func(context, markdown_events);
-            context = res.0;
-            markdown_events = res.1;
-            match res.2 {
+            let res = func(&mut context, &mut markdown_events, &self);
+            // context = res.0;
+            // markdown_events = res.1;
+            match res{
                 PostprocessorResult::StopHere => break,
                 PostprocessorResult::StopAndSkipNote => return Ok(()),
                 PostprocessorResult::Continue => (),
@@ -615,10 +621,10 @@ impl<'a> Exporter<'a> {
                 for func in &self.embed_postprocessors {
                     // Postprocessors running on embeds shouldn't be able to change frontmatter (or
                     // any other metadata), so we give them a clone of the context.
-                    let res = func(child_context, events);
-                    child_context = res.0;
-                    events = res.1;
-                    match res.2 {
+                    let res = func(&mut child_context, &mut events, &self);
+                    // child_context = res.0;
+                    // events = res.1;
+                    match res {
                         PostprocessorResult::StopHere => break,
                         PostprocessorResult::StopAndSkipNote => {
                             events = vec![];
