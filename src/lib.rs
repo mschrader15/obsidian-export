@@ -29,7 +29,7 @@ use std::fs::{self, File};
 use std::io::prelude::*;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use std::str;
+use std::str::{self, FromStr};
 
 /// A series of markdown [Event]s that are generated while traversing an Obsidian markdown note.
 pub type MarkdownEvents<'a> = Vec<Event<'a>>;
@@ -240,6 +240,7 @@ pub struct Exporter<'a> {
     yaml_inclusion_key: serde_yaml::Value,
     postprocessors: Vec<&'a Postprocessor>,
     embed_postprocessors: Vec<&'a Postprocessor>,
+    flat_export: bool,
 }
 
 impl<'a> fmt::Debug for Exporter<'a> {
@@ -265,6 +266,7 @@ impl<'a> fmt::Debug for Exporter<'a> {
                     self.embed_postprocessors.len()
                 ),
             )
+            .field("flat_output_structure", &self.flat_export)
             .finish()
     }
 }
@@ -284,6 +286,7 @@ impl<'a> Exporter<'a> {
             vault_contents: None,
             postprocessors: vec![],
             embed_postprocessors: vec![],
+            flat_export: false,
         }
     }
 
@@ -312,6 +315,12 @@ impl<'a> Exporter<'a> {
         self.yaml_inclusion_key = serde_yaml::Value::String(key.to_string());
         self
     }
+
+    pub fn flat_export(&mut self, flat_export: bool) -> &mut Exporter<'a> {
+        self.flat_export = flat_export;
+        self
+    }
+
     /// Set the behavior when recursive embeds are encountered.
     ///
     /// When `recursive` is true (the default), emdeds are always processed recursively. This may
@@ -389,12 +398,21 @@ impl<'a> Exporter<'a> {
             .into_par_iter()
             .filter(|file| file.starts_with(&self.start_at))
             .try_for_each(|file| {
-                let relative_path = file
-                    .strip_prefix(&self.start_at.clone())
-                    .expect("file should always be nested under root")
-                    .to_path_buf();
+                let relative_path = if self.flat_export {
+                    // PathBuf::from_str("").expect("Path should be created")
+                    PathBuf::from(file.file_name().expect("file must have a name"))
+                } else {
+                    file.strip_prefix(&self.start_at.clone())
+                        .expect("file should always be nested under root")
+                        .to_path_buf()
+                };
                 let destination = &self.destination.join(&relative_path);
-                self.export_note(&file, destination)
+                // let relative_path = file
+                //     .strip_prefix(&self.start_at.clone())
+                //     .expect("file should always be nested under root")
+                //     .to_path_buf();
+                // let destination = &self.destination.join(&relative_path);
+                self.export_note(&file, &destination)
             })?;
         Ok(())
     }
@@ -414,7 +432,7 @@ impl<'a> Exporter<'a> {
         context.frontmatter = frontmatter;
         for func in &self.postprocessors {
             let res = func(&mut context, &mut markdown_events, &self);
-            match res{
+            match res {
                 PostprocessorResult::StopHere => break,
                 PostprocessorResult::StopAndSkipNote => return Ok(()),
                 PostprocessorResult::Continue => (),
@@ -690,16 +708,22 @@ impl<'a> Exporter<'a> {
         // We use root_file() rather than current_file() here to make sure links are always
         // relative to the outer-most note, which is the note which this content is inserted into
         // in case of embedded notes.
-        let rel_link = diff_paths(
-            target_file,
-            &context
-                .root_file()
-                .parent()
-                .expect("obsidian content files should always have a parent"),
-        )
-        .expect("should be able to build relative path when target file is found in vault");
+        // if !self.flat_export {
+        let rel_link = if self.flat_export {
+            PathBuf::from(target_file.file_name().expect("file must have a name"))
+        } else {
+            diff_paths(
+                target_file,
+                &context
+                    .root_file()
+                    .parent()
+                    .expect("obsidian content files should always have a parent"),
+            )
+            .expect("should be able to build relative path when target file is found in vault")
+        };
 
         let rel_link = rel_link.to_string_lossy();
+
         let mut link = utf8_percent_encode(&rel_link, PERCENTENCODE_CHARS).to_string();
 
         if let Some(section) = reference.section {

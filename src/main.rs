@@ -68,7 +68,15 @@ struct Opts {
         help="Exclude all embeds that do not have the front-matter-inclusion-key",
         default="false",
     )]
-    embeded_front_matter_inclusion: bool
+    embeded_front_matter_inclusion: bool,
+
+    #[options(
+        no_short, 
+        long="flat-output-structure",
+        help="Do not preserve structure in the output, instead export to single directory",
+        default="false",
+    )]
+    flat_output_structure: bool
 }
 
 fn frontmatter_strategy_from_str(input: &str) -> Result<FrontmatterStrategy> {
@@ -104,6 +112,7 @@ fn main() {
     exporter.frontmatter_strategy(args.frontmatter_strategy);
     exporter.process_embeds_recursively(!args.no_recursive_embeds);
     exporter.walk_options(walk_options);
+    exporter.flat_export(args.flat_output_structure);
     
     if args.front_matter_inclusion.len() > 0{
         exporter.yaml_inclusion_key(&args.front_matter_inclusion);
