@@ -1,7 +1,7 @@
 use obsidian_export::postprocessors::{softbreaks_to_hardbreaks, yaml_includer};
 use obsidian_export::{Context, Exporter, MarkdownEvents, PostprocessorResult};
 use pretty_assertions::assert_eq;
-use pulldown_cmark::{CowStr, Event};
+use pulldown_cmark::{CowStr, Event, Tag};
 use serde_yaml::Value;
 use std::fs::{read_to_string, remove_file};
 use std::path::PathBuf;
@@ -33,6 +33,87 @@ fn append_frontmatter(
         Value::String("baz".to_string()),
     );
     PostprocessorResult::Continue
+}
+
+/// Replace footnotes MDX element
+fn replace_footnote(
+    context: &mut Context,
+    events: &mut MarkdownEvents,
+    _: & Exporter
+) -> PostprocessorResult {
+    // let local_events = events.clone();
+    let new_events= events.clone();
+    let mut footnote_events: Vec<usize> = Vec::new();
+    for (j, event ) in new_events.iter().enumerate(){
+        // This works because footnotes come at the end in my notes
+        // if !footnote_events.contains(&j){
+            match event {
+                Event::FootnoteReference(text) => {
+                    let inner_iter = new_events.iter();
+                    for (i, new_event) in inner_iter.enumerate(){
+                        match new_event {
+                            Event::Start(t) => {
+                                // t.to_string().eq(&text.to_string())
+                                fun_name(t, text, events, j, i, &mut footnote_events);
+                            },
+                            Event::End(t) => {
+                                // fun_name(t, text, events, j, i, &mut footnote_events);
+                            }
+                            _ => ()
+                        };
+                    }
+                    
+                },
+                _ => ()
+        }
+    };
+    // };
+    footnote_events.reverse();
+    for i in footnote_events{
+        events.remove(i);
+    }
+
+    PostprocessorResult::Continue
+}
+
+fn fun_name(t: &Tag, text: &CowStr, events: &mut Vec<Event>, j: usize, i: usize, footnote_events: &mut Vec<usize>) {
+    match t {
+        Tag::FootnoteDefinition(ft) => {
+            if ft.to_string().eq(&text.to_string()) {
+                let next = std::cmp::min(i + 2, events.len() - 1);
+                events[j] = match &events[next] {
+                    Event::Text(t) => Event::Text(CowStr::from(
+                        "<Footnote idName=".to_owned() + &text.clone().to_string() + ">" + &t.clone().to_string() + "</Footnote>")
+                    ),
+                    _ => events[next].clone()
+                }; 
+                // Event::Text(ft.clone());
+                footnote_events.push(i.clone()); 
+                footnote_events.push(i.clone() + 1); 
+                footnote_events.push(i.clone() + 2);  
+            } 
+        },
+        _ => ()
+    }
+}
+
+#[test]
+fn test_footnote_replace() {
+    let tmp_dir = TempDir::new().expect("failed to make tempdir");
+    let mut exporter = Exporter::new(
+        PathBuf::from("tests/testdata/input/postprocessors"),
+        tmp_dir.path().to_path_buf(),
+    );
+    exporter.add_postprocessor(&replace_footnote);
+    // Should have no effect with embeds:
+
+    exporter.run().unwrap();
+
+    let expected =
+        read_to_string("tests/testdata/expected/postprocessors/Note_embed_postprocess_only.md")
+            .unwrap();
+    let actual = read_to_string(tmp_dir.path().clone().join(PathBuf::from("footnote.md"))).unwrap();
+    assert_eq!(expected, actual);
 }
 
 // The purpose of this test to verify the `append_frontmatter` postprocessor is called to extend
