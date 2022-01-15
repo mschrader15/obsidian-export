@@ -10,33 +10,29 @@ use serde_yaml::Value;
 pub fn softbreaks_to_hardbreaks(
     _context: &mut Context,
     events: &mut MarkdownEvents,
-    _exporter: & Exporter,
 ) -> PostprocessorResult {
-
-    for event in events.iter_mut(){
-        *event = if let Event::SoftBreak = event {
-            Event::HardBreak
-        } else {
-            // event
-            event.clone()
+    for event in events.iter_mut() {
+        if event == &Event::SoftBreak {
+            *event = Event::HardBreak;
         }
-    };
-
+    }
     PostprocessorResult::Continue
 }
 
+/// This postprocessor converts returns a new function (closure) that searches for the specified 
+/// yaml_filter_key in a notes frontmatter. If it does not find a yaml_filter_key: true in the YAML, 
+/// it tells the exporter to StopandSkipNote
+pub fn create_frontmatter_filter(
+    yaml_filter_key: &str,
+) -> impl Fn(&mut Context, &mut MarkdownEvents) -> PostprocessorResult {
+    let key = serde_yaml::Value::String(yaml_filter_key.to_string());
 
-/// This postprocessor scans the YAML frontmatter for the desired inclusion tag. 
-/// If it is found, Postprocessing continues
-/// Otherwise, the note should be skipped
-pub fn yaml_includer(
-    context: &mut Context,
-    _events: &mut MarkdownEvents,
-    exporter: & Exporter,
-) -> PostprocessorResult {
-    
-    match context.frontmatter.get(&exporter.yaml_inclusion_key) {
-        Some(Value::Bool(true)) => return PostprocessorResult::Continue,
-        _ => return PostprocessorResult::StopAndSkipNote
-    };
+    // This bit creates and returns the closure. The `move` statement is needed to make it take
+    // ownership of `key` above.
+    move |context: &mut Context, _events: &mut MarkdownEvents| {
+        match context.frontmatter.get(&key) {
+            Some(Value::Bool(true)) => PostprocessorResult::Continue,
+            _ => PostprocessorResult::StopAndSkipNote,
+        }
+    }
 }

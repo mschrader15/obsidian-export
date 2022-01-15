@@ -1,6 +1,6 @@
 use eyre::{eyre, Result};
 use gumdrop::Options;
-use obsidian_export::postprocessors::{softbreaks_to_hardbreaks, yaml_includer};
+use obsidian_export::postprocessors::{softbreaks_to_hardbreaks, create_frontmatter_filter};
 use obsidian_export::{ExportError, Exporter, FrontmatterStrategy, WalkOptions};
 use std::{env, path::PathBuf};
 
@@ -56,19 +56,28 @@ struct Opts {
     hard_linebreaks: bool,
 
     #[options(
-        no_short, 
-        long="front-matter-inclusion-key",
-        help="Only include files with the specified YAML key set to 'true'",
+        no_short,
+        long="frontmatter-export-filtering",
+        help="Exclude all files from export that do not have a matching YAML key set to true in the frontmatter",
+        default="false"
     )]
-    front_matter_inclusion: String,
+    frontmatter_export_filtering: bool,
 
     #[options(
-        no_short, 
-        long="exclude-embeds-by-frontmatter",
-        help="Exclude all embeds that do not have the front-matter-inclusion-key",
-        default="false",
+        no_short,
+        long = "frontmatter-filter-key",
+        help = "YAML key to use if front-matter-filtering is enables",
+        default = "export"
     )]
-    embeded_front_matter_inclusion: bool,
+    frontmatter_filter_key: String,
+
+    #[options(
+        no_short,
+        long = "frontmatter-filter-embeds",
+        help = "Exclude all embeds that do not have the front-matter-inclusion-key",
+        default = "false"
+    )]
+    frontmatter_filter_embeds: bool,
 
     #[options(
         no_short, 
@@ -119,6 +128,15 @@ fn main() {
         exporter.add_postprocessor(&yaml_includer);
         if args.embeded_front_matter_inclusion{
             exporter.add_embed_postprocessor(&yaml_includer);
+        }
+    }
+
+    // Adding YAML export filter if 
+    let yaml_postprocessor = create_frontmatter_filter(&args.frontmatter_filter_key);
+    if args.frontmatter_export_filtering {
+        exporter.add_postprocessor(&yaml_postprocessor);
+        if args.frontmatter_filter_embeds {
+            exporter.add_embed_postprocessor(&yaml_postprocessor);
         }
     }
 
