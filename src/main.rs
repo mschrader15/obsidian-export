@@ -123,11 +123,12 @@ fn main() {
     exporter.walk_options(walk_options);
     exporter.flat_export(args.flat_output_structure);
     
-    if args.front_matter_inclusion.len() > 0{
-        exporter.yaml_inclusion_key(&args.front_matter_inclusion);
-        exporter.add_postprocessor(&yaml_includer);
-        if args.embeded_front_matter_inclusion{
-            exporter.add_embed_postprocessor(&yaml_includer);
+    // Adding YAML export filter if 
+    let yaml_postprocessor = create_frontmatter_filter(&args.frontmatter_filter_key);
+    if args.frontmatter_export_filtering {
+        exporter.add_postprocessor(&yaml_postprocessor);
+        if args.frontmatter_filter_embeds {
+            exporter.add_embed_postprocessor(&yaml_postprocessor);
         }
     }
 
